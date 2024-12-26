@@ -1,13 +1,3 @@
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local LocalPlayer = game:GetService("Players").LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-local HttpService = game:GetService("HttpService")
-
--- DELETIONLIBRARY: A Simple GUI Library for Roblox
--- This script provides functions to create windows, tabs, buttons, and more.
-
 local DELETIONLIBRARY = {}
 
 -- GUI framework (Example)
@@ -39,7 +29,7 @@ function DELETIONLIBRARY:MakeWindow(properties)
         BackgroundColor3 = Color3.fromRGB(40, 40, 40),
         Parent = window
     })
-    
+
     -- Title label
     local titleLabel = CreateGuiElement("TextLabel", {
         Size = UDim2.new(1, 0, 0.1, 0),
@@ -49,6 +39,28 @@ function DELETIONLIBRARY:MakeWindow(properties)
         BackgroundTransparency = 1,
         Parent = background
     })
+
+    -- Draggable functionality for the window
+    local dragging = false
+    local dragInput, dragStart, startPos
+    background.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = background.Position
+            input.Changed:Connect(function()
+                if dragging == false then return end
+                local delta = input.Position - dragStart
+                background.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end)
+        end
+    end)
+
+    background.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
 
     return {
         Name = properties.Name,
@@ -93,16 +105,20 @@ function DELETIONLIBRARY:MakeTab(properties)
         Name = properties.Name,
         tabFrame = tabFrame,
         AddButton = function(self, buttonProperties)
+            -- Correct reference to add button to the current tab's frame
             return self:AddButton(buttonProperties)
         end,
-        AddToggle = function(self, toggleProperties)
-            return self:AddToggle(toggleProperties)
+        AddSlider = function(self, sliderProperties)
+            return self:AddSlider(sliderProperties)
+        end,
+        AddLabel = function(self, labelText)
+            return self:AddLabel(labelText)
         end
     }
 end
 
 -- AddButton: Adds a button to the tab
-function DELETIONLIBRARY:MakeButton(properties)
+function DELETIONLIBRARY:AddButton(properties)
     local button = CreateGuiElement("TextButton", {
         Size = UDim2.new(0.5, 0, 0.1, 0),
         Text = properties.Name or "Button",
@@ -111,94 +127,88 @@ function DELETIONLIBRARY:MakeButton(properties)
         BackgroundColor3 = Color3.fromRGB(0, 120, 255),
         Parent = properties.Parent
     })
+    -- Connect button callback
     button.MouseButton1Click:Connect(properties.Callback)
 
     return button
 end
 
--- AddToggle: Adds a checkbox toggle to the tab
-function DELETIONLIBRARY:AddToggle(properties)
-    local toggle = CreateGuiElement("TextButton", {
-        Size = UDim2.new(0.5, 0, 0.1, 0),
-        Text = properties.Name or "Toggle",
-        TextSize = 18,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        BackgroundColor3 = Color3.fromRGB(255, 0, 0),
+-- AddSlider: Adds a slider to the tab
+function DELETIONLIBRARY:AddSlider(properties)
+    local sliderFrame = CreateGuiElement("Frame", {
+        Size = UDim2.new(1, -10, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
         Parent = properties.Parent
     })
 
-    local state = properties.Default or false
+    local sliderBar = CreateGuiElement("Frame", {
+        Size = UDim2.new(1, -20, 0, 5),
+        Position = UDim2.new(0, 10, 0.5, -2),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        Parent = sliderFrame
+    })
 
-    toggle.MouseButton1Click:Connect(function()
-        state = not state
-        properties.Callback(state)  -- Run the callback with the updated state
-    end)
+    local sliderButton = CreateGuiElement("Frame", {
+        Size = UDim2.new(0, 10, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 120, 255),
+        Parent = sliderBar
+    })
 
-    return {
-        Set = function(self, value)
-            state = value
-            properties.Callback(state)
+    local valueLabel = CreateGuiElement("TextLabel", {
+        Size = UDim2.new(0, 50, 0, 20),
+        Position = UDim2.new(1, 10, 0.5, -10),
+        Text = properties.Default .. " " .. properties.ValueName,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
+        Parent = sliderFrame
+    })
+
+    local dragging = false
+    local min = properties.Min
+    local max = properties.Max
+    local increment = properties.Increment
+    local default = properties.Default
+
+    sliderButton.Position = UDim2.new((default - min) / (max - min), 0, 0, 0)
+
+    sliderButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            while dragging do
+                local position = input.Position.X
+                local newPosition = math.clamp(position - sliderBar.AbsolutePosition.X, 0, sliderBar.AbsoluteSize.X)
+                sliderButton.Position = UDim2.new(newPosition / sliderBar.AbsoluteSize.X, 0, 0, 0)
+
+                local value = math.floor(min + (newPosition / sliderBar.AbsoluteSize.X) * (max - min) / increment) * increment
+                valueLabel.Text = value .. " " .. properties.ValueName
+                properties.Callback(value)
+                wait(0.01)
+            end
         end
-    }
-end
-
--- AddColorpicker: Adds a color picker to the tab
-function DELETIONLIBRARY:AddColorpicker(properties)
-    -- For simplicity, we'll create a color box that changes color when clicked
-    local colorPicker = CreateGuiElement("TextButton", {
-        Size = UDim2.new(0.3, 0, 0.1, 0),
-        Text = properties.Name or "Color Picker",
-        TextSize = 18,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        BackgroundColor3 = properties.Default or Color3.fromRGB(255, 0, 0),
-        Parent = properties.Parent
-    })
-
-    colorPicker.MouseButton1Click:Connect(function()
-        local newColor = Color3.fromRGB(math.random(0, 255), math.random(0, 255), math.random(0, 255))
-        colorPicker.BackgroundColor3 = newColor
-        properties.Callback(newColor)
     end)
 
-    return colorPicker
+    sliderButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    return sliderFrame
 end
 
--- MakeNotification: Creates a notification popup
-function DELETIONLIBRARY:MakeNotification(properties)
-    local notification = Instance.new("ScreenGui")
-    notification.Name = "Notification"
-    notification.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-
-    local frame = CreateGuiElement("Frame", {
-        Size = UDim2.new(0.3, 0, 0.1, 0),
-        Position = UDim2.new(0.35, 0, 0, 0),
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 0.5,
-        Parent = notification
-    })
-
+-- AddLabel: Adds a simple label to the tab
+function DELETIONLIBRARY:AddLabel(labelText)
     local label = CreateGuiElement("TextLabel", {
-        Size = UDim2.new(1, 0, 1, 0),
-        Text = properties.Name or "Notification",
+        Size = UDim2.new(1, 0, 0, 30),
+        Text = labelText,
         TextSize = 18,
         TextColor3 = Color3.fromRGB(255, 255, 255),
         BackgroundTransparency = 1,
-        Parent = frame
+        Parent = self.tabFrame
     })
 
-    -- Notification image (optional)
-    if properties.Image then
-        local imageLabel = CreateGuiElement("ImageLabel", {
-            Size = UDim2.new(0.1, 0, 0.1, 0),
-            Position = UDim2.new(0, 0, 0, 0),
-            Image = properties.Image,
-            Parent = frame
-        })
-    end
-
-    -- Close after the specified time
-    wait(properties.Time or 5)
-    notification:Destroy()
+    return label
 end
 
 -- Return the DELETIONLIBRARY object
